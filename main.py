@@ -1,18 +1,20 @@
 import tkinter as rw
 import tkinter.messagebox
+from turtle import width
+import customtkinter as ctk
 from tkinter import ttk
 import concurrent.futures
-from turtle import left
-from jmespath import search
-from numpy import pad
 import threading
+from matplotlib.pyplot import text
+from numpy import MAY_SHARE_BOUNDS, delete
 import requests
 from time import sleep
 from sys import exit
 from random import uniform as rand
-from datetime import datetime
 import regex as re
 import socket
+import os
+import ast
 
 
 API_URL = 'https://upibankvalidator.com/api/upiValidation?upi='
@@ -23,9 +25,11 @@ class App(rw.Tk):
         self.found = 0
         self.count = 0
         super().__init__()
-        self.geometry("600x500+300+2")
+        self.geometry("600x800+300+2")
         self.title("UPI Recon")
+        self.open_files()
         # self.wm_iconbitmap("images\me_icon.ico")
+        ctk.set_appearance_mode("light")
 
     def check_internet(self):
         try:
@@ -36,17 +40,19 @@ class App(rw.Tk):
         return False
        
     def start_operation(self,searchtext):
+        self.index=0
+        self.progressbar_percent.config(text="0%")
+        self.progressbar['value'] = 0
         self.searched_string.config(text=searchtext)
         self.logs_text['state']= rw.NORMAL
         self.logs_text.delete(1.0,rw.END)
         self.logs_text['state']= rw.DISABLED
         self.status_bar.config(text="")
+        self.delete_records()
         t= threading.Thread(target=self.searchvpa,args=(searchtext,upi_suffix_dict,5))
         t.start()
 
     def textget(self):
-        self.progressbar_percent.config(text="0%")
-        self.progressbar['value'] = 0
         text= self.search_bar.get()
         email_pattern= r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
         car_no_pattern1= r'^[A-Za-z]{2}[ -][0-9]{1,2}[a-zA-z](?: [A-Za-z])?(?: [A-Za-z]*)? [0-9]{4}$'
@@ -68,7 +74,7 @@ class App(rw.Tk):
         self.searched_string.config(text=text)
 
     def searchvpa(self, searchtext,vpa_dict, threadcount):
-        self.search_button['state']= rw.DISABLED
+        self.search_button.configure(state= rw.DISABLED)
         print(searchtext)
         self.search_bar.delete(0,rw.END)
         if(threadcount == 0):
@@ -92,7 +98,7 @@ class App(rw.Tk):
             self.status_bar.config(text="No record Found")
         else:
             self.status_bar.config(text=f"{self.found} records found")
-        self.search_button['state']= rw.NORMAL
+        self.search_button.configure(state= rw.NORMAL)      
         self.count=0
         self.found=0
         
@@ -100,16 +106,25 @@ class App(rw.Tk):
         r = requests.post(api_url+vpa)
         print(r.status_code)
         if r.status_code == 200 and r.json()['isUpiRegistered'] is True:
+            handle= vpa.split("@")[1]
+            print(handle)
+            bank_name= str(self.find_bank_name(handle))[1:-1].replace("'","")
+            app_name= str(self.find_app_name(handle))[1:-1].replace("'","")
             self.logs_text['state']= rw.NORMAL
             name= r.json()['name']
-            print(name+vpa)
-            self.logs_text.insert(rw.END,name+" "+vpa+"\n")
+            print(name+" "+vpa)
+            print("done")
+            self.table.insert(parent='',index='end',iid=self.index,text='',values=(name,vpa,app_name,bank_name))
+            self.index+=1
+            self.logs_text.insert(rw.END,name+" "+vpa+" "+app_name+" "+bank_name+" "+"\n")
             self.found += 1
             self.logs_text['state']= rw.DISABLED
-        if r.status_code == 400:
-            print("Bad Request")
-        if r.status_code == 429:
-            print("Too Many Requests")
+        # if r.status_code == 400:
+        #     # print("Bad Request")
+        #     pass
+        # if r.status_code == 429:
+        #     # print("Too Many Requests")
+        #     pass
         self.count += 1
         self.reportProgress(self.count)
         
@@ -128,17 +143,17 @@ class App(rw.Tk):
         self.window_frame.pack(pady=20,expand=True,fill=rw.BOTH)
         self.label_frame= rw.LabelFrame(self.window_frame)
         self.label_frame.pack()
-        self.label = rw.Label(self.label_frame,text="UPI Recon",font=("Roboto Medium", 30),bg="#ffffff")
+        self.label = ctk.CTkLabel(self.label_frame,text="UPI Recon",bg="#ffffff",text_font=("Roboto Medium",30))
         self.label.grid(column= 0, row= 0)
         
         self.action_frame= rw.LabelFrame(self.window_frame)
-        self.search_bar_label= rw.Label(self.action_frame,text="Enter a mob. no.\ email \ car no.:")
+        self.search_bar_label= ctk.CTkLabel(self.action_frame,text="Enter a mob. no. \ email \ car no.:")
         self.search_bar_label.grid(column=0,row=0,sticky=rw.NSEW)
-        self.search_bar= rw.Entry(self.action_frame,width=30)
+        self.search_bar= ctk.CTkEntry(self.action_frame,width=200)
         self.search_bar.grid(column=1,row=0,padx=10)
-        self.search_button= rw.Button(self.action_frame,text="Search",command= self.textget)
+        self.search_button= rw.Button(self.action_frame,text="Search",command= self.textget,cursor="hand2",activebackground="#adb2af")
         self.search_button.grid(column=2,row=0,pady=10,sticky=rw.NSEW)
-        self.searched_string= rw.Label(self.action_frame)
+        self.searched_string= ctk.CTkLabel(self.action_frame,text="")
         self.searched_string.grid(column=0,row=1,sticky=rw.NSEW)
         self.action_frame.pack(pady=20,expand=True,fill=rw.BOTH)
         
@@ -146,17 +161,60 @@ class App(rw.Tk):
         logs_label= rw.LabelFrame(self.window_frame, text= "Results")
         self.progressbar= ttk.Progressbar(logs_label,orient="horizontal",mode="determinate",length=500, maximum=100)
         self.progressbar.pack(padx=5,pady=(2,2),expand=True,fill="x")
-        self.progressbar_percent=rw.Label(logs_label)
+        self.progressbar_percent=ctk.CTkLabel(logs_label,text="")
         self.progressbar_percent.pack(pady=(1,30))
         scrollbar= rw.Scrollbar(logs_label)
         scrollbar.pack(side=rw.RIGHT,fill=rw.Y)
         self.logs_text= rw.Text(logs_label,width=60,height=10,yscrollcommand=scrollbar.set, state=rw.DISABLED)
         self.logs_text.pack(expand=True,fill="both")
         scrollbar.config(command=self.logs_text.yview)
-        self.status_bar= rw.Label(logs_label)
+
+        table_scrollbar=rw.Scrollbar(logs_label)
+        table_scrollbar.pack(side="right",fill="y")
+        table_xscrollbar=rw.Scrollbar(logs_label,orient="horizontal")
+        table_xscrollbar.pack(side="bottom",fill="x")
+        self.table = ttk.Treeview(logs_label,selectmode="none",yscrollcommand= table_scrollbar.set ,xscrollcommand=table_xscrollbar.set)
+        table_scrollbar.config(command=self.table.yview)
+        table_scrollbar.config(command=self.table.xview)
+        self.table['columns'] = ("Name","Virtual Payment Address(VPA)","App Name","Bank Name")
+        # self.table_data["show"]="headings"
+        self.table.column("#0",width=0,stretch=rw.NO)
+        self.table.column("Name",width=50,minwidth=50,anchor=rw.CENTER)
+        self.table.column("Virtual Payment Address(VPA)",width=90,minwidth=90,anchor=rw.CENTER)
+        self.table.column("App Name",width=50,minwidth=50,anchor=rw.CENTER)
+        self.table.column("Bank Name",width=50,minwidth=50,anchor=rw.CENTER)
+
+        self.table.heading("#0",text="")
+        self.table.heading("Name",text="Name",anchor= rw.CENTER)
+        self.table.heading("Virtual Payment Address(VPA)",text="Virtual Payment Address(VPA)",anchor= rw.CENTER)
+        self.table.heading("App Name",text="App Name",anchor= rw.CENTER)
+        self.table.heading("Bank Name",text="Bank Name",anchor= rw.CENTER)
+        self.table.pack(pady=30,fill=rw.BOTH)
+        self.status_bar= ctk.CTkLabel(logs_label,text="")
         self.status_bar.pack()
         logs_label.pack(fill="both",expand=True)
-
+    def delete_records(self):
+        for row in self.table.get_children():
+            self.table.delete(row)
+    def find_app_name(self,handle):
+        apps=[]
+        for app_name,handles in self.app_list.items():
+            if handle in handles:
+                apps.append(app_name)
+        return(apps)
+    def find_bank_name(self,handle):
+        banks=[]
+        for bank_name,handles in self.banks_list.items():
+            if handle in handles:
+               banks.append(bank_name) 
+        return(banks)
+    def open_files(self):
+        with open(os.path.join(os.getcwd(),"data\\apps.txt"), 'r') as apps_file:
+            self.app_list=ast.literal_eval(apps_file.read())
+            apps_file.close()
+        with open(os.path.join(os.getcwd(),"data\\bankshandle.txt"), 'r') as banks_handle_file:
+            self.banks_list= ast.literal_eval(banks_handle_file.read())
+            banks_handle_file.close()
     def start(self):
         self.window()
         self.mainloop()
