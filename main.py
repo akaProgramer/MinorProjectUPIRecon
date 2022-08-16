@@ -1,12 +1,10 @@
+import pandas as pd 
 import tkinter as rw
-import tkinter.messagebox
-from turtle import width
+from tkinter import messagebox
 import customtkinter as ctk
 from tkinter import ttk
 import concurrent.futures
 import threading
-from matplotlib.pyplot import text
-from numpy import MAY_SHARE_BOUNDS, delete
 import requests
 from time import sleep
 from sys import exit
@@ -25,7 +23,7 @@ class App(rw.Tk):
         self.found = 0
         self.count = 0
         super().__init__()
-        self.geometry("600x800+300+2")
+        self.geometry("600x700+300+2")
         self.title("UPI Recon")
         self.open_files()
         # self.wm_iconbitmap("images\me_icon.ico")
@@ -44,16 +42,16 @@ class App(rw.Tk):
         self.progressbar_percent.config(text="0%")
         self.progressbar['value'] = 0
         self.searched_string.config(text=searchtext)
-        self.logs_text['state']= rw.NORMAL
-        self.logs_text.delete(1.0,rw.END)
-        self.logs_text['state']= rw.DISABLED
         self.status_bar.config(text="")
+        self.export_button.config(state=rw.DISABLED)
         self.delete_records()
         t= threading.Thread(target=self.searchvpa,args=(searchtext,upi_suffix_dict,5))
         t.start()
 
     def textget(self):
         text= self.search_bar.get()
+        self.progressbar['value'] = 0
+        self.progressbar_percent.config(text="0%")
         email_pattern= r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
         car_no_pattern1= r'^[A-Za-z]{2}[ -][0-9]{1,2}[a-zA-z](?: [A-Za-z])?(?: [A-Za-z]*)? [0-9]{4}$'
         car_no_pattenn2= r'^[A-Za-z]{2}[ -][0-9]{1,2}(?: [A-Za-z])?(?: [A-Za-z]*)? [0-9]{4}$'
@@ -64,13 +62,13 @@ class App(rw.Tk):
             self.start_operation(email_text)
         elif (re.fullmatch(car_no_pattern1,text) or re.fullmatch(car_no_pattenn2,text)):
             car_number= text.replace(" ","")
-            car_text= "netc."+ car_number
+            car_text= "netc."+ car_number.lower()
             self.start_operation(car_text)
         elif re.fullmatch(number_pattern,text):
             number_text= text
             self.start_operation(number_text)
         else:
-            self.status_bar["text"]= "not a valid input"
+            self.status_bar.config(text= "not a valid input", fg="red")
         self.searched_string.config(text=text)
 
     def searchvpa(self, searchtext,vpa_dict, threadcount):
@@ -95,7 +93,7 @@ class App(rw.Tk):
                     executor._threads.clear()
                     concurrent.futures.thread._threads_queues.clear()
         if self.found == 0:
-            self.status_bar.config(text="No record Found")
+            self.status_bar.config(text="No record Found",fg="red")
         else:
             self.status_bar.config(text=f"{self.found} records found")
         self.search_button.configure(state= rw.NORMAL)      
@@ -104,21 +102,16 @@ class App(rw.Tk):
         
     def address_discovery(self, vpa, api_url):
         r = requests.post(api_url+vpa)
-        print(r.status_code)
+        # print(r.status_code)
         if r.status_code == 200 and r.json()['isUpiRegistered'] is True:
             handle= vpa.split("@")[1]
             print(handle)
             bank_name= str(self.find_bank_name(handle))[1:-1].replace("'","")
             app_name= str(self.find_app_name(handle))[1:-1].replace("'","")
-            self.logs_text['state']= rw.NORMAL
             name= r.json()['name']
-            print(name+" "+vpa)
-            print("done")
             self.table.insert(parent='',index='end',iid=self.index,text='',values=(name,vpa,app_name,bank_name))
             self.index+=1
-            self.logs_text.insert(rw.END,name+" "+vpa+" "+app_name+" "+bank_name+" "+"\n")
             self.found += 1
-            self.logs_text['state']= rw.DISABLED
         # if r.status_code == 400:
         #     # print("Bad Request")
         #     pass
@@ -136,7 +129,14 @@ class App(rw.Tk):
         value= (round(((value)/len(upi_suffix_dict))*100))
         self.progressbar['value']= value
         self.progressbar_percent.config(text=f"{value}%")
+        if self.found >=1 and value == 100:
+            self.export_button.configure(state=rw.NORMAL)
 
+    def export_function(self):
+        data = [self.table.item(item)['values']for item in self.table.get_children()]
+        df = pd.DataFrame(data)
+        df.to_csv('report.csv',encoding='shift-jis',header=False,index=False)
+        messagebox.showinfo("success","successfully saved")
 
     def window(self):
         self.window_frame = rw.Frame(self)
@@ -162,12 +162,8 @@ class App(rw.Tk):
         self.progressbar= ttk.Progressbar(logs_label,orient="horizontal",mode="determinate",length=500, maximum=100)
         self.progressbar.pack(padx=5,pady=(2,2),expand=True,fill="x")
         self.progressbar_percent=ctk.CTkLabel(logs_label,text="")
-        self.progressbar_percent.pack(pady=(1,30))
-        scrollbar= rw.Scrollbar(logs_label)
-        scrollbar.pack(side=rw.RIGHT,fill=rw.Y)
-        self.logs_text= rw.Text(logs_label,width=60,height=10,yscrollcommand=scrollbar.set, state=rw.DISABLED)
-        self.logs_text.pack(expand=True,fill="both")
-        scrollbar.config(command=self.logs_text.yview)
+        self.progressbar_percent.pack(pady=(1,15))
+        
 
         table_scrollbar=rw.Scrollbar(logs_label)
         table_scrollbar.pack(side="right",fill="y")
@@ -189,10 +185,13 @@ class App(rw.Tk):
         self.table.heading("Virtual Payment Address(VPA)",text="Virtual Payment Address(VPA)",anchor= rw.CENTER)
         self.table.heading("App Name",text="App Name",anchor= rw.CENTER)
         self.table.heading("Bank Name",text="Bank Name",anchor= rw.CENTER)
-        self.table.pack(pady=30,fill=rw.BOTH)
+        self.table.pack(pady=30,fill=rw.BOTH,expand=True)
+        self.export_button= rw.Button(logs_label,text="Export",state=rw.DISABLED,command=self.export_function,cursor="hand2")
+        self.export_button.pack()
         self.status_bar= ctk.CTkLabel(logs_label,text="")
         self.status_bar.pack()
         logs_label.pack(fill="both",expand=True)
+
     def delete_records(self):
         for row in self.table.get_children():
             self.table.delete(row)

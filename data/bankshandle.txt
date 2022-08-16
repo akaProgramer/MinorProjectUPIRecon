@@ -14,4 +14,6 @@
 "PayTM Bank": ["paytm"],
 "BANDHAN Bank": ["bandhan"],
 "Citi Bank": ["citi","citigold"],
+"IDFC First Bank": ["idfcnetc"],
+"State Bank of India": ["sbi"]
 }

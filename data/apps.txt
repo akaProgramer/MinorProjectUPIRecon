@@ -31,6 +31,7 @@
 "PayWiz":["idbi"],
 "BANDHAN UPI": ["bandhan"],
 "Citi Mobile": ["citi","citigold"],
-"MyJio App" : ["jio"]
+"MyJio App" : ["jio"],
+"UNO": ["sbi"]
 
 }
